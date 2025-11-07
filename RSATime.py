@@ -1,153 +1,113 @@
-import random
-import math
-import time
-import matplotlib.pyplot as plt  
+import time, os
+from Crypto.PublicKey import RSA
 
+###GENERACION DE CLAVES
+def generar_claves(bits=1024):
+    
+    key = RSA.generate(bits)
 
-def es_primo(n):
-    if n < 2:
-        return False
-    for i in range(2, int(n ** 0.5) + 1):
-        if n % i == 0:
-            return False
-    return True
-
-
-def generar_primo(min, max):
-    while True:
-        p = random.randint(min, max)
-        if es_primo(p):
-            return p
-
-
-def generar_claves():
-    p = generar_primo(100, 500)
-    q = generar_primo(100, 500)
-    while p == q:
-        q = generar_primo(100, 500)
-
-    n = p * q
-    phi = (p - 1) * (q - 1)
-
-    e = 65537
-    if math.gcd(e, phi) != 1:
-        e = 3
-        while math.gcd(e, phi) != 1:
-            e += 2
-
-    d = pow(e, -1, phi)
-
+    n, e, d = key.n, key.e, key.d
+    
+    with open("clave_publica.txt", "w") as pub:
+        pub.write(f"{n},{e}")
+    
+    with open("clave_privada.txt", "w") as priv:
+        priv.write(f"{n},{d}")
+    
     return (n, e), (n, d)
 
-
+####CIFRADO
 def cifra(mensaje, clave_publica):
     n, e = clave_publica
     inicio = time.perf_counter()
+    # Si es número, conviértelo a string
+    if isinstance(mensaje, int):
+        mensaje = str(mensaje)
     cifrado = [pow(ord(c), e, n) for c in mensaje]
     fin = time.perf_counter()
-    tiempo = fin - inicio
-    return cifrado, tiempo
+    with open("mensaje_cifrado.txt", "w") as f:
+        f.write(",".join(map(str, cifrado)))
+    return cifrado, fin - inicio
 
-
+###DESCIFRADO
 def descifrar(cifrado, clave_privada):
     n, d = clave_privada
     inicio = time.perf_counter()
     descifrado = "".join(chr(pow(c, d, n)) for c in cifrado)
     fin = time.perf_counter()
-    tiempo = fin - inicio
-    return descifrado, tiempo
+    return descifrado, fin - inicio
+
+###PRUEBAS
+def pruebas(archivo, clave_publica, clave_privada):
+    with open(archivo, "r", encoding="utf-8", errors="ignore") as f:
+        contenido = f.read()
+
+    tamaño_mb = os.path.getsize(archivo) / (1024 * 1024)
+
+    ###cifra
+    inicio_cif = time.perf_counter()
+    cifrado, _ = cifra(contenido, clave_publica)
+    fin_cif = time.perf_counter()
+
+    ###descifra
+    inicio_des = time.perf_counter()
+    descifrado, _ = descifrar(cifrado, clave_privada)
+    fin_des = time.perf_counter()
 
 
+    tiempo_cif = fin_cif - inicio_cif
+    tiempo_des = fin_des - inicio_des
 
-def medir_tiempos(reps=5, show_plot=True):
-    ##Mide tiempos de cifrado/descifrado para distintos tamaños de mensaje.
-    ##reps: número de repeticiones por tamaño (se promedian los tiempos).
-    ##show_plot: si True muestra la gráfica; si False sólo imprime los resultados.
-    public_key, private_key = generar_claves()
+    print("-" * 50)
+    print(f"\nArchivo: {archivo}")
+    print(f"Tamaño: {tamaño_mb:.2f} MB")
+    print(f"Tiempo cifrado: {tiempo_cif:.4f} s")
+    print(f"Tiempo descifrado: {tiempo_des:.4f} s")
+    print("-" * 50)
 
-    archivo = open ('Archivos/archivo_0mb.txt')
-    print (archivo.readline(1))
-    
-    tiempos_cifrado = []
-    tiempos_descifrado = []
+    return tamaño_mb, tiempo_cif, tiempo_des
 
-    print("\n----- Medición de tiempos RSA (promedio de {} repeticiones) -----".format(reps))
-    for t in tamanos:
-        mensaje = "z" * t
-        total_c = 0.0
-        total_d = 0.0
-        for _ in range(reps):
-            cifrado, tiempo_c = cifra(mensaje, public_key)
-            #descifrar devuelve (texto, tiempo)
-            _, tiempo_d = descifrar(cifrado, private_key)
-            total_c += tiempo_c
-            total_d += tiempo_d
-
-        prom_c = total_c / reps
-        prom_d = total_d / reps
-        tiempos_cifrado.append(prom_c)
-        tiempos_descifrado.append(prom_d)
-        print(f"Tamaño: {t:5d} | Cifrado promedio: {prom_c:.6f}s | Descifrado promedio: {prom_d:.6f}s")
-
-    if show_plot:
-        # Graficar resultados
-        plt.figure(figsize=(8, 5))
-        plt.plot(tamanos, tiempos_cifrado, marker='o', label='Cifrado')
-        plt.plot(tamanos, tiempos_descifrado, marker='s', label='Descifrado')
-        plt.xlabel("Tamaño del mensaje (caracteres)")
-        plt.ylabel("Tiempo (segundos)")
-        plt.title("Tiempos de cifrado y descifrado RSA")
-        plt.legend()
-        plt.grid(True)
-        plt.show()
-
-
-if __name__ == "__main__":
+###MENU PRINCIPAL
+def menu_principal():
     while True:
-        print("================================")
-        print("\nRSA Cifrado/Descifrado con medición de tiempo\n")
-        print("1. Cifrar mensaje (genera nuevas claves)")
-        print("2. Descifrar mensaje (usando clave privada)")
-        print("3. Medir tiempos con diferentes tamaños de entrada")
-        print("4. Salir")
-        opcion = input("\nElige una opción: ")
+        opcion = input("RSA\n1. Cifrar\n2. Descifrar\n3. Pruebas\nElige una opción... ")
 
         if opcion == "1":
+            print("\nGenerando claves...")
             public_key, private_key = generar_claves()
-            print("\nClaves generadas:")
-            print("Clave pública (n, e):", public_key)
-            print("Clave privada (n, d):", private_key)
+            print("Clave pública y privada guardadas en archivos.")
 
-            mensaje = input("\nEscribe el mensaje a cifrar: ")
-            cifrado, tiempo_c = cifra(mensaje, public_key)
-            
-            print(f"\nTiempo de cifrado: {tiempo_c:.6f} segundos")
-            print("Mensaje cifrado:", cifrado)
+            mensaje = input("\nEscribe el mensaje o número a cifrar: ")
+            cifrado, t1 = cifra(mensaje, public_key)
+            print("\nMensaje cifrado guardado en 'mensaje_cifrado.txt'.")
+            print(f"Tiempo de cifrado: {t1:.6f}s")
 
         elif opcion == "2":
             try:
-                print("\nIntroduce la clave privada:")
-                n = int(input("Valor de n: "))
-                d = int(input("Valor de d: "))
-                private_key = (n, d)
+                with open("clave_privada.txt", "r") as f:
+                    n_str, d_str = f.read().strip().split(",")
+                    private_key = (int(n_str), int(d_str))
 
-                cifrado_input = input("\nIntroduce el mensaje cifrado (números separados por comas): ")
-                cifrado = [int(x) for x in cifrado_input.split(",")]
+                with open("mensaje_cifrado.txt", "r") as f:
+                    cifrado = [int(x) for x in f.read().strip().split(",") if x]
                 
-                descifrado, tiempo_d = descifrar(cifrado, private_key)
-                
-                print(f"\nTiempo de descifrado: {tiempo_d:.6f} segundos")
-                print("Mensaje descifrado:", descifrado)
-            except ValueError:
-                print("\nError: Asegúrate de introducir números válidos.")
+                descifrado, t2 = descifrar(cifrado, private_key)
+                print("\nMensaje descifrado:", descifrado)
+                print(f"Tiempo de descifrado: {t2:.6f}s")
+            
             except Exception as e:
-                print(f"\nError al descifrar: {str(e)}")
-
+                print("\nError al descifrar:", e)
+        
         elif opcion == "3":
-            medir_tiempos()
+            pub, priv = generar_claves(1024)
+            archivos = ["Archivos\\archivo_1mb.txt"] ##Modificar el archivo 
+            resultados = []
 
-        elif opcion == "4":
+            for archivo in archivos:
+                resultados.append(pruebas(archivo, pub, priv))
+            break
+        else:
             break
 
-        else:
-            print("\nOpción inválida. Por favor, elige una opción válida.")
+if __name__ == "__main__":
+    menu_principal()
